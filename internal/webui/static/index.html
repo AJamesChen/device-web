@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Device Console</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark small">JC</span><span>Device Console</span></div>
+    <div class="top-actions">
+      <span id="connection" class="status-dot">Connecting</span>
+      <form id="logout-form" method="post" action="/logout"><button class="button-secondary" type="submit">Sign out</button></form>
+    </div>
+  </header>
+
+  <main class="shell">
+    <section class="hero">
+      <div><p class="eyebrow">System overview</p><h1 id="hostname">Loading device…</h1><p id="os" class="muted">Reading system information</p></div>
+      <button id="refresh" class="button-secondary" type="button">Refresh</button>
+    </section>
+
+    <section class="metrics" aria-label="System metrics">
+      <article class="metric"><span>Firmware</span><strong id="firmware">—</strong><small id="build-id">Build —</small></article>
+      <article class="metric"><span>Active slot</span><strong id="slot">—</strong><small id="root-device">Root —</small></article>
+      <article class="metric"><span>CPU load</span><strong id="cpu-load">—</strong><small id="cpu-model">—</small></article>
+      <article class="metric"><span>Memory</span><strong id="memory">—</strong><small id="memory-detail">—</small></article>
+      <article class="metric"><span>Kernel</span><strong id="kernel">—</strong><small id="architecture">—</small></article>
+      <article class="metric"><span>Uptime</span><strong id="uptime">—</strong><small id="updated-at">Last update —</small></article>
+    </section>
+
+    <section class="panel update-panel">
+      <div class="panel-heading"><div><p class="eyebrow">RAUC A/B update</p><h2>Firmware update</h2></div><span id="update-state" class="state neutral">Idle</span></div>
+      <p class="muted">Choose a signed <code>.raucb</code> bundle. RAUC verifies its signature and compatibility before writing the inactive slot.</p>
+      <div id="message" class="alert hidden" role="status"></div>
+      <form id="upload-form">
+        <label class="dropzone" for="firmware-file">
+          <input id="firmware-file" type="file" accept=".raucb,application/octet-stream" required>
+          <span class="drop-title">Select firmware bundle</span>
+          <span id="file-name" class="muted">No file selected</span>
+        </label>
+        <div class="progress-track" aria-hidden="true"><span id="progress"></span></div>
+        <div class="upload-row"><span id="upload-detail" class="muted">Maximum size: 384 MiB</span><button id="install" type="submit" disabled>Upload and install</button></div>
+      </form>
+      <p class="warning">Do not remove power during installation. Reboot only after the state reports succeeded.</p>
+    </section>
+  </main>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>

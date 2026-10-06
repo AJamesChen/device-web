@@ -1,0 +1,8 @@
+# Development defaults. Change the password before using an untrusted network.
+DEVICE_WEB_LISTEN=:8081
+DEVICE_WEB_USERNAME=admin
+DEVICE_WEB_PASSWORD=jamesc
+DEVICE_WEB_OTA_API_URL=http://127.0.0.1:8080
+DEVICE_WEB_OTA_TOKEN=dca6327c4e1e
+DEVICE_WEB_MAX_UPLOAD=402653184
+DEVICE_WEB_SECURE_COOKIES=false

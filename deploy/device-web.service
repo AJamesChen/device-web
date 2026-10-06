@@ -1,0 +1,20 @@
+[Unit]
+Description=Device management web console
+After=network.target jamesc-ota-api.service
+Wants=jamesc-ota-api.service
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/default/device-web
+ExecStart=/usr/bin/device-web
+Restart=on-failure
+RestartSec=5s
+DynamicUser=yes
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

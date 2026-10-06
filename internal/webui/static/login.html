@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Device Console · Sign in</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="login-page">
+  <main class="login-card">
+    <div class="brand-mark" aria-hidden="true">JC</div>
+    <p class="eyebrow">Raspberry Pi 4B</p>
+    <h1>Device Console</h1>
+    <p class="muted">Sign in to inspect this device and install firmware.</p>
+    <p id="login-error" class="alert error hidden" role="alert">The username or password is incorrect.</p>
+    <form method="post" action="/login" class="login-form">
+      <label for="username">Username</label>
+      <input id="username" name="username" type="text" autocomplete="username" required autofocus>
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required>
+      <button type="submit">Sign in</button>
+    </form>
+    <p class="security-note">Development console · use only on a trusted network</p>
+  </main>
+  <script src="/static/login.js" defer></script>
+</body>
+</html>
