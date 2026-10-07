@@ -35,9 +35,9 @@
       <p class="muted">Choose a signed <code>.raucb</code> bundle. RAUC verifies its signature and compatibility before writing the inactive slot.</p>
       <div id="message" class="alert hidden" role="status"></div>
       <form id="upload-form">
-        <label class="dropzone" for="firmware-file">
-          <input id="firmware-file" type="file" accept=".raucb,application/octet-stream" required>
-          <span class="drop-title">Select firmware bundle</span>
+        <label id="firmware-dropzone" class="dropzone" for="firmware-file">
+          <input id="firmware-file" type="file" accept=".raucb,application/octet-stream">
+          <span class="drop-title">Drop a firmware bundle here or select a file</span>
           <span id="file-name" class="muted">No file selected</span>
         </label>
         <div class="progress-track" aria-hidden="true"><span id="progress"></span></div>

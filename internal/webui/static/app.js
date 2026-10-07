@@ -1,6 +1,8 @@
 const $ = (selector) => document.querySelector(selector);
 let csrfToken = '';
 let polling = null;
+let selectedFirmware = null;
+const maxFirmwareSize = 384 * 1024 * 1024;
 
 function text(selector, value) { $(selector).textContent = value ?? '—'; }
 function bytes(value) {
@@ -79,6 +81,25 @@ function showMessage(message, error) {
   box.textContent = message;
   box.className = `alert ${error ? 'error' : 'success'}`;
 }
+function clearMessage() {
+  const box = $('#message');
+  box.textContent = '';
+  box.className = 'alert hidden';
+}
+function selectFirmware(file) {
+  let error = '';
+  if (!file) error = 'Select a firmware bundle.';
+  else if (!file.name.toLowerCase().endsWith('.raucb')) error = 'Firmware must be a .raucb bundle.';
+  else if (file.size === 0) error = 'The selected firmware bundle is empty.';
+  else if (file.size > maxFirmwareSize) error = `Firmware exceeds the ${bytes(maxFirmwareSize)} upload limit.`;
+
+  selectedFirmware = error ? null : file;
+  text('#file-name', selectedFirmware ? `${file.name} · ${bytes(file.size)}` : 'No file selected');
+  $('#install').disabled = !selectedFirmware;
+  if (error) showMessage(error, true);
+  else clearMessage();
+  return !error;
+}
 function upload(file) {
   const request = new XMLHttpRequest();
   request.open('POST', '/api/firmware');
@@ -107,14 +128,39 @@ function upload(file) {
 document.addEventListener('DOMContentLoaded', async () => {
   try { csrfToken = (await json('/api/session')).csrf_token; } catch (_) { return; }
   $('#refresh').addEventListener('click', () => { loadSystem(); loadUpdate(); });
-  $('#firmware-file').addEventListener('change', (event) => {
-    const file = event.target.files[0];
-    text('#file-name', file ? `${file.name} · ${bytes(file.size)}` : 'No file selected');
-    $('#install').disabled = !file;
+  const fileInput = $('#firmware-file');
+  const dropzone = $('#firmware-dropzone');
+  let dragDepth = 0;
+  fileInput.addEventListener('change', (event) => selectFirmware(event.target.files[0]));
+  dropzone.addEventListener('dragenter', (event) => {
+    event.preventDefault();
+    dragDepth += 1;
+    dropzone.classList.add('drag-over');
+  });
+  dropzone.addEventListener('dragover', (event) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+  });
+  dropzone.addEventListener('dragleave', (event) => {
+    event.preventDefault();
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (dragDepth === 0) dropzone.classList.remove('drag-over');
+  });
+  dropzone.addEventListener('drop', (event) => {
+    event.preventDefault();
+    dragDepth = 0;
+    dropzone.classList.remove('drag-over');
+    const files = event.dataTransfer.files;
+    if (files.length !== 1) {
+      selectFirmware(null);
+      showMessage('Drop exactly one .raucb bundle.', true);
+      return;
+    }
+    selectFirmware(files[0]);
   });
   $('#upload-form').addEventListener('submit', (event) => {
     event.preventDefault();
-    const file = $('#firmware-file').files[0];
+    const file = selectedFirmware;
     if (!file || !window.confirm(`Install ${file.name}?`)) return;
     $('#install').disabled = true;
     $('#progress').style.width = '0';

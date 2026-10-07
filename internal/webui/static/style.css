@@ -47,7 +47,8 @@ h2 { margin-bottom: 0; font-size: 1.55rem; }
 .state.succeeded { color: var(--green); background: var(--green-soft); }
 .state.failed { color: var(--red); background: #fde9e9; }
 .dropzone { display: grid; gap: .35rem; padding: 1.4rem; margin: 1.5rem 0 1rem; border: 1px dashed #aab8b1; border-radius: .8rem; background: #fafcfb; cursor: pointer; }
-.dropzone:hover { border-color: var(--green); background: var(--green-soft); }
+.dropzone:hover, .dropzone.drag-over { border-color: var(--green); background: var(--green-soft); }
+.dropzone.drag-over { border-style: solid; box-shadow: 0 0 0 3px rgba(23, 107, 77, .15); }
 .dropzone input { position: absolute; opacity: 0; pointer-events: none; }
 .drop-title { font-weight: 800; }
 .progress-track { height: .45rem; background: #e7ece9; border-radius: 1rem; overflow: hidden; margin-bottom: 1rem; }

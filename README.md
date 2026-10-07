@@ -8,7 +8,7 @@ its browser assets in one native executable and proxies the loopback-only
 
 - Login and server-side sessions
 - Responsive system-information dashboard
-- Signed RAUC bundle upload with browser progress
+- Click-to-select or drag-and-drop signed RAUC bundle upload with browser progress
 - Live RAUC installation status
 - CSRF protection, strict cookies, security headers, and upload limits
 - Standard-library-only Go build with no runtime dependencies
