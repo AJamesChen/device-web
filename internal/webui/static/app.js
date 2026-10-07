@@ -58,7 +58,14 @@ function renderUpdate(data) {
   badge.textContent = phase.charAt(0).toUpperCase() + phase.slice(1);
   badge.className = `state ${phase}`;
   if (data.bytes_received) text('#upload-detail', `${bytes(data.bytes_received)} received by device`);
-  if (['uploading', 'installing'].includes(phase)) startPolling();
+  if (phase === 'uploading') {
+    showMessage('Firmware upload is in progress.', false);
+    startPolling();
+  }
+  if (phase === 'installing') {
+    showMessage('Upload complete. RAUC is verifying and installing the firmware.', false);
+    startPolling();
+  }
   if (phase === 'succeeded') showMessage('Firmware installed successfully. The device is ready to reboot.', false);
   if (phase === 'failed') showMessage(`Firmware installation failed${data.exit_code !== undefined ? ` (RAUC exit ${data.exit_code})` : ''}.`, true);
 }
@@ -116,13 +123,62 @@ function upload(file) {
     let data = {};
     try { data = JSON.parse(request.responseText); } catch (_) { /* handled below */ }
     if (request.status >= 200 && request.status < 300) {
-      showMessage('Upload complete. RAUC installation has started.', false);
       renderUpdate(data);
       startPolling();
     } else showMessage(data.error || `Upload failed (${request.status}).`, true);
   };
-  request.onerror = () => { $('#install').disabled = false; showMessage('The upload connection failed.', true); };
+  request.onerror = () => reconcileUploadStatus(file.size);
   request.send(file);
+}
+
+async function reconcileUploadStatus(expectedBytes) {
+  $('#install').disabled = false;
+  try {
+    const data = await json('/api/update');
+    const phase = data.state || data.phase;
+    const receivedExpectedBundle = Number(data.bytes_received) === expectedBytes;
+    if (phase === 'uploading' || (receivedExpectedBundle && ['installing', 'succeeded', 'failed'].includes(phase))) {
+      renderUpdate(data);
+      return;
+    }
+  } catch (_) { /* Report the original connection failure below. */ }
+  showMessage('The upload connection failed and its installation status could not be confirmed.', true);
+}
+
+const delay = (milliseconds) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+async function waitForReboot() {
+  let wentOffline = false;
+  for (let attempt = 0; attempt < 90; attempt += 1) {
+    await delay(2000);
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 3000);
+    try {
+      const response = await fetch('/health', {cache: 'no-store', signal: controller.signal});
+      if (wentOffline && response.ok) { window.location = '/login'; return; }
+    } catch (_) {
+      wentOffline = true;
+      setConnected(false);
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  }
+  showMessage('The device has not returned yet. Reload this page after checking its power and network connection.', true);
+}
+async function rebootDevice() {
+  if (!window.confirm('Reboot this device now?')) return;
+  const button = $('#reboot');
+  button.disabled = true;
+  button.textContent = 'Rebooting…';
+  try {
+    await json('/api/reboot', {method: 'POST', headers: {'X-CSRF-Token': csrfToken}});
+    if (polling) { clearInterval(polling); polling = null; }
+    showMessage('Reboot requested. Waiting for the device to return…', false);
+    waitForReboot();
+  } catch (error) {
+    button.disabled = false;
+    button.textContent = 'Reboot';
+    showMessage(error.message, true);
+  }
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -166,6 +222,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     $('#progress').style.width = '0';
     upload(file);
   });
+  $('#reboot').addEventListener('click', rebootDevice);
   $('#logout-form').addEventListener('submit', (event) => {
     event.preventDefault();
     fetch('/logout', {method: 'POST', headers: {'X-CSRF-Token': csrfToken}}).then(() => { window.location = '/login'; });

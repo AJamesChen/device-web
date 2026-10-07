@@ -117,6 +117,12 @@ func (s *Server) authenticated(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.uploadFirmware(w, r)
+	case r.URL.Path == "/api/reboot" && r.Method == http.MethodPost:
+		if !validCSRF(r, current) {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "invalid CSRF token"})
+			return
+		}
+		s.proxyJSON(w, r, http.MethodPost, "/api/v1/reboot", nil)
 	case r.URL.Path == "/logout" && r.Method == http.MethodPost:
 		if !validCSRF(r, current) {
 			http.Error(w, "invalid CSRF token", http.StatusForbidden)

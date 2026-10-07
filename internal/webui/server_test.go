@@ -32,6 +32,8 @@ func newTestServers(t *testing.T) (*httptest.Server, *httptest.Server) {
 				return
 			}
 			writeJSON(w, http.StatusAccepted, map[string]string{"state": "installing"})
+		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/reboot":
+			writeJSON(w, http.StatusAccepted, map[string]string{"state": "rebooting"})
 		default:
 			http.NotFound(w, r)
 		}
@@ -174,5 +176,33 @@ func TestRejectsOversizedFirmware(t *testing.T) {
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusRequestEntityTooLarge {
 		t.Fatalf("oversized status = %d, want %d", response.StatusCode, http.StatusRequestEntityTooLarge)
+	}
+}
+
+func TestRebootRequiresCSRFAndProxiesRequest(t *testing.T) {
+	frontend, _ := newTestServers(t)
+	client := clientWithJar(t)
+	csrf := login(t, client, frontend.URL)
+
+	request, _ := http.NewRequest(http.MethodPost, frontend.URL+"/api/reboot", nil)
+	response, err := client.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if response.StatusCode != http.StatusForbidden {
+		t.Fatalf("missing CSRF status = %d, want %d", response.StatusCode, http.StatusForbidden)
+	}
+
+	request, _ = http.NewRequest(http.MethodPost, frontend.URL+"/api/reboot", nil)
+	request.Header.Set("X-CSRF-Token", csrf)
+	response, err = client.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusAccepted {
+		body, _ := io.ReadAll(response.Body)
+		t.Fatalf("reboot status = %d, want %d: %s", response.StatusCode, http.StatusAccepted, body)
 	}
 }

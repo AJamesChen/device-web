@@ -10,6 +10,8 @@ its browser assets in one native executable and proxies the loopback-only
 - Responsive system-information dashboard
 - Click-to-select or drag-and-drop signed RAUC bundle upload with browser progress
 - Live RAUC installation status
+- Authoritative success/failure recovery if the upload response is interrupted
+- Confirmed device reboot with automatic reconnect detection
 - CSRF protection, strict cookies, security headers, and upload limits
 - Standard-library-only Go build with no runtime dependencies
 
@@ -46,6 +48,16 @@ then choose **Upload and install**.
 Keep the device powered while the page reports `uploading` or `installing`.
 Reboot only after it reports `succeeded`; RAUC verifies the bundle signature
 and compatibility and writes the inactive A/B slot.
+
+The dashboard polls the OTA API through installation and displays the final
+success or failure state. If the browser loses the upload response, it queries
+the OTA status before reporting an error, avoiding a false failure when RAUC
+has already accepted or installed the bundle.
+
+Use **Reboot** in the header to restart the device. The action requires an
+authenticated session, CSRF token, and confirmation. Reboot is rejected while
+a firmware upload or RAUC installation is active. The page waits for the
+device to go offline and redirects to login after it returns.
 
 ## Configuration
 

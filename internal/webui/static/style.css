@@ -20,6 +20,8 @@ button:hover { background: var(--green-dark); }
 button:disabled { opacity: .45; cursor: not-allowed; }
 .button-secondary { color: var(--ink); background: transparent; border: 1px solid var(--line); }
 .button-secondary:hover { background: var(--surface); }
+.button-danger { color: var(--red); background: transparent; border: 1px solid #dfb5b5; }
+.button-danger:hover { color: white; background: var(--red); }
 .topbar { height: 68px; padding: 0 clamp(1rem, 4vw, 3rem); display: flex; align-items: center; justify-content: space-between; background: var(--surface); border-bottom: 1px solid var(--line); }
 .brand, .top-actions { display: flex; align-items: center; gap: .8rem; font-weight: 750; }
 .brand-mark { width: 3.2rem; height: 3.2rem; display: grid; place-items: center; color: white; background: var(--green); border-radius: .9rem; font-weight: 850; letter-spacing: -.05em; }
