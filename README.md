@@ -35,6 +35,18 @@ Open <http://localhost:8081> and sign in with the development defaults:
 
 The dashboard expects `jamesc-ota-api` at `http://127.0.0.1:8080`.
 
+## Install firmware
+
+Open the firmware update panel and either click the drop area or drag one
+signed `.raucb` bundle onto it. The browser rejects multiple files, empty
+files, filenames without the `.raucb` suffix, and bundles larger than the
+default 384 MiB limit before upload. Confirm the selected filename and size,
+then choose **Upload and install**.
+
+Keep the device powered while the page reports `uploading` or `installing`.
+Reboot only after it reports `succeeded`; RAUC verifies the bundle signature
+and compatibility and writes the inactive A/B slot.
+
 ## Configuration
 
 | Environment variable | Default | Purpose |
