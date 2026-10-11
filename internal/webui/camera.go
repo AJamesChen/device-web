@@ -221,19 +221,103 @@ func readJPEG(reader *bufio.Reader) ([]byte, error) {
 		}
 		previous = value
 	}
-	previous = 0
-	for len(frame) < maxJPEGSize {
+
+	// Parse length-delimited JPEG header segments so SOI/EOI bytes inside an
+	// EXIF thumbnail are not mistaken for boundaries of the outer image.
+	for {
+		markerPrefix, err := reader.ReadByte()
+		if err != nil {
+			return nil, err
+		}
+		if markerPrefix != 0xff {
+			return nil, errors.New("invalid JPEG marker prefix")
+		}
+		if err := appendJPEGBytes(&frame, markerPrefix); err != nil {
+			return nil, err
+		}
+		marker, err := reader.ReadByte()
+		if err != nil {
+			return nil, err
+		}
+		for marker == 0xff {
+			if err := appendJPEGBytes(&frame, marker); err != nil {
+				return nil, err
+			}
+			marker, err = reader.ReadByte()
+			if err != nil {
+				return nil, err
+			}
+		}
+		if err := appendJPEGBytes(&frame, marker); err != nil {
+			return nil, err
+		}
+		if marker == 0xd9 {
+			return frame, nil
+		}
+		if marker == 0x01 || marker >= 0xd0 && marker <= 0xd8 {
+			continue
+		}
+
+		lengthBytes := make([]byte, 2)
+		if _, err := io.ReadFull(reader, lengthBytes); err != nil {
+			return nil, err
+		}
+		if err := appendJPEGBytes(&frame, lengthBytes...); err != nil {
+			return nil, err
+		}
+		segmentLength := int(lengthBytes[0])<<8 | int(lengthBytes[1])
+		if segmentLength < 2 {
+			return nil, errors.New("invalid JPEG segment length")
+		}
+		payload := make([]byte, segmentLength-2)
+		if _, err := io.ReadFull(reader, payload); err != nil {
+			return nil, err
+		}
+		if err := appendJPEGBytes(&frame, payload...); err != nil {
+			return nil, err
+		}
+		if marker == 0xda {
+			break
+		}
+	}
+
+	// Entropy-coded scan data uses FF00 byte stuffing; only an unescaped FFD9
+	// terminates this baseline JPEG frame. Restart markers are also valid.
+	for {
 		value, err := reader.ReadByte()
 		if err != nil {
 			return nil, err
 		}
-		frame = append(frame, value)
-		if previous == 0xff && value == 0xd9 {
-			return frame, nil
+		if err := appendJPEGBytes(&frame, value); err != nil {
+			return nil, err
 		}
-		previous = value
+		if value != 0xff {
+			continue
+		}
+		marker, err := reader.ReadByte()
+		if err != nil {
+			return nil, err
+		}
+		if err := appendJPEGBytes(&frame, marker); err != nil {
+			return nil, err
+		}
+		switch {
+		case marker == 0x00 || marker >= 0xd0 && marker <= 0xd7:
+			continue
+		case marker == 0xd9:
+			return frame, nil
+		default:
+			return nil, errors.New("unsupported marker in JPEG scan data")
+		}
 	}
-	return nil, errors.New("JPEG frame exceeds size limit")
+}
+
+func appendJPEGBytes(frame *[]byte, values ...byte) error {
+	if len(*frame)+len(values) > maxJPEGSize {
+		return errors.New("JPEG frame exceeds size limit")
+	}
+	*frame = append(*frame, values...)
+	return nil
 }
 
 func writeMJPEGFrame(writer io.Writer, frame []byte) error {

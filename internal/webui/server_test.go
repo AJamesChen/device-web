@@ -1,6 +1,8 @@
 package webui
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -271,7 +273,7 @@ func TestCameraRESTAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := string([]byte{0xff, 0xd8, 't', 'e', 's', 't', 0xff, 0xd9})
+	want := string(testJPEG())
 	if snapshot.StatusCode != http.StatusOK || snapshot.Header.Get("Content-Type") != "image/jpeg" || string(picture) != want {
 		t.Fatalf("snapshot response = %d %q %x", snapshot.StatusCode, snapshot.Header.Get("Content-Type"), picture)
 	}
@@ -334,8 +336,28 @@ func TestCameraCommandHelper(t *testing.T) {
 	if mode == "" {
 		return
 	}
-	_, _ = os.Stdout.Write([]byte{0xff, 0xd8, 't', 'e', 's', 't', 0xff, 0xd9})
+	_, _ = os.Stdout.Write(testJPEG())
 	if mode == "stream" {
 		time.Sleep(time.Hour)
 	}
+}
+
+func TestReadJPEGSkipsEmbeddedEXIFThumbnail(t *testing.T) {
+	jpeg := []byte{
+		0xff, 0xd8,
+		0xff, 0xe1, 0x00, 0x08, 0xff, 0xd8, 0xaa, 0xff, 0xd9, 0xbb,
+		0xff, 0xda, 0x00, 0x02,
+		0x11, 0xff, 0x00, 0x22, 0xff, 0xd9,
+	}
+	got, err := readJPEG(bufio.NewReader(bytes.NewReader(jpeg)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, jpeg) {
+		t.Fatalf("readJPEG returned %x, want %x", got, jpeg)
+	}
+}
+
+func testJPEG() []byte {
+	return []byte{0xff, 0xd8, 0xff, 0xda, 0x00, 0x02, 't', 'e', 's', 't', 0xff, 0xd9}
 }

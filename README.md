@@ -110,7 +110,10 @@ gst-launch-1.0 -q v4l2src device=/dev/video0 io-mode=mmap \
 Snapshots use the same pipeline with `num-buffers=1`. The camera must provide
 JPEG/MJPEG at the configured resolution and frame rate. Install the GStreamer
 core tools and the `video4linux2` plugin; the Yocto recipe declares both when
-building the project image. `GET /api/camera` reports the active backend.
+building the project image. The stream parser follows JPEG segment lengths so
+embedded EXIF thumbnails do not truncate playback frames. Starting playback
+also stops any stale capture before opening a new stream. `GET /api/camera`
+reports the active backend.
 
 ## Configuration
 

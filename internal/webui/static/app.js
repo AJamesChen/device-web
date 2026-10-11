@@ -113,8 +113,14 @@ function renderCameraState(state) {
   $('#camera-play').disabled = cameraPlaying;
   $('#camera-stop').disabled = !cameraPlaying;
 }
-function playCamera() {
+async function playCamera() {
   clearCameraMessage();
+  try {
+    await stopCameraPlayback({quiet: true});
+  } catch (error) {
+    showCameraMessage(error.message, true);
+    return;
+  }
   if (cameraObjectURL) {
     URL.revokeObjectURL(cameraObjectURL);
     cameraObjectURL = '';
