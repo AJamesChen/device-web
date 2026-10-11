@@ -22,6 +22,10 @@ func main() {
 		OTAAPIToken:   env("DEVICE_WEB_OTA_TOKEN", "dca6327c4e1e"),
 		SecureCookies: envBool("DEVICE_WEB_SECURE_COOKIES", false),
 		MaxUpload:     envInt64("DEVICE_WEB_MAX_UPLOAD", 384*1024*1024),
+		CameraDevice:  env("DEVICE_WEB_CAMERA_DEVICE", "/dev/video0"),
+		CameraWidth:   envInt("DEVICE_WEB_CAMERA_WIDTH", 640),
+		CameraHeight:  envInt("DEVICE_WEB_CAMERA_HEIGHT", 480),
+		CameraFPS:     envInt("DEVICE_WEB_CAMERA_FPS", 15),
 	}
 
 	app, err := webui.New(cfg)
@@ -82,6 +86,19 @@ func envInt64(name string, fallback int64) int64 {
 		return fallback
 	}
 	parsed, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || parsed <= 0 {
+		slog.Warn("invalid positive integer environment value", "name", name, "value", value)
+		return fallback
+	}
+	return parsed
+}
+
+func envInt(name string, fallback int) int {
+	value := os.Getenv(name)
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(value)
 	if err != nil || parsed <= 0 {
 		slog.Warn("invalid positive integer environment value", "name", name, "value", value)
 		return fallback

@@ -12,8 +12,10 @@ its browser assets in one native executable and proxies the loopback-only
 - Live RAUC installation status
 - Authoritative success/failure recovery if the upload response is interrupted
 - Confirmed device reboot with automatic reconnect detection
+- Camera tab with live MJPEG playback, stop control, and JPEG snapshots
+- Authenticated REST camera API for browser and automation clients
 - CSRF protection, strict cookies, security headers, and upload limits
-- Standard-library-only Go build with no runtime dependencies
+- Standard-library-only Go build; camera capture uses `v4l2-ctl` at runtime
 
 ## Run locally
 
@@ -59,6 +61,41 @@ authenticated session, CSRF token, and confirmation. Reboot is rejected while
 a firmware upload or RAUC installation is active. The page waits for the
 device to go offline and redirects to login after it returns.
 
+## Camera and REST API
+
+Open the **Camera** tab and choose **Play video** to view the MJPEG stream,
+**Stop playback** to release the V4L2 device, or **Snap picture** to capture and
+download a JPEG. Only one stream or snapshot operation can own the camera at a
+time. Taking a picture from the page stops live playback first.
+
+The same functions are available through the authenticated REST API:
+
+| Method | Endpoint | Result |
+| --- | --- | --- |
+| `GET` | `/api/camera` | Camera state and configured format as JSON |
+| `GET` | `/api/camera/stream` | Live `multipart/x-mixed-replace` MJPEG response |
+| `POST` | `/api/camera/stop` | Stops capture and returns `{"state":"stopped"}` |
+| `POST` | `/api/camera/snapshot` | Captures and returns one `image/jpeg` |
+
+All endpoints require the login session cookie. The two `POST` calls also
+require the session's `csrf_token` from `GET /api/session` in the
+`X-CSRF-Token` header. For example, after logging in and saving cookies:
+
+```sh
+curl -c cookies.txt -d 'username=admin' -d 'password=YOUR_PASSWORD' \
+  http://DEVICE:8081/login
+CSRF=$(curl -sS -b cookies.txt http://DEVICE:8081/api/session | \
+  sed -n 's/.*"csrf_token":"\([^"]*\)".*/\1/p')
+curl -b cookies.txt http://DEVICE:8081/api/camera/stream -o live.mjpeg
+curl -b cookies.txt -H "X-CSRF-Token: $CSRF" -X POST \
+  http://DEVICE:8081/api/camera/snapshot -o snapshot.jpg
+curl -b cookies.txt -H "X-CSRF-Token: $CSRF" -X POST \
+  http://DEVICE:8081/api/camera/stop
+```
+
+The service account must be able to open the configured V4L2 node. The
+supplied systemd unit adds its dynamic user to the `video` group.
+
 ## Configuration
 
 | Environment variable | Default | Purpose |
@@ -70,6 +107,10 @@ device to go offline and redirects to login after it returns.
 | `DEVICE_WEB_OTA_TOKEN` | `dca6327c4e1e` | Internal OTA API bearer token |
 | `DEVICE_WEB_MAX_UPLOAD` | `402653184` | Maximum firmware bytes |
 | `DEVICE_WEB_SECURE_COOKIES` | `false` | Require HTTPS for session cookies |
+| `DEVICE_WEB_CAMERA_DEVICE` | `/dev/video0` | V4L2 capture device |
+| `DEVICE_WEB_CAMERA_WIDTH` | `640` | Capture width in pixels |
+| `DEVICE_WEB_CAMERA_HEIGHT` | `480` | Capture height in pixels |
+| `DEVICE_WEB_CAMERA_FPS` | `15` | Requested stream frame rate |
 
 The supplied files in `deploy/` show the intended systemd configuration.
 

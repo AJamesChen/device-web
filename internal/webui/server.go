@@ -1,6 +1,7 @@
 package webui
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"embed"
@@ -12,6 +13,7 @@ import (
 	"io/fs"
 	"net/http"
 	"net/url"
+	"os/exec"
 	"strings"
 	"sync"
 	"time"
@@ -32,6 +34,10 @@ type Config struct {
 	OTAAPIToken   string
 	SecureCookies bool
 	MaxUpload     int64
+	CameraDevice  string
+	CameraWidth   int
+	CameraHeight  int
+	CameraFPS     int
 }
 
 type session struct {
@@ -40,12 +46,17 @@ type session struct {
 }
 
 type Server struct {
-	config   Config
-	apiURL   *url.URL
-	client   *http.Client
-	sessions map[string]session
-	mu       sync.Mutex
-	static   http.Handler
+	config        Config
+	apiURL        *url.URL
+	client        *http.Client
+	sessions      map[string]session
+	mu            sync.Mutex
+	static        http.Handler
+	cameraCommand func(context.Context, string, ...string) *exec.Cmd
+	cameraRun     sync.Mutex
+	cameraStateMu sync.Mutex
+	cameraCancel  context.CancelFunc
+	cameraDone    chan struct{}
 }
 
 func New(config Config) (*Server, error) {
@@ -58,6 +69,23 @@ func New(config Config) (*Server, error) {
 	if config.MaxUpload <= 0 {
 		return nil, errors.New("maximum upload size must be positive")
 	}
+	if config.CameraDevice == "" {
+		config.CameraDevice = "/dev/video0"
+	}
+	if config.CameraWidth == 0 {
+		config.CameraWidth = 640
+	}
+	if config.CameraHeight == 0 {
+		config.CameraHeight = 480
+	}
+	if config.CameraFPS == 0 {
+		config.CameraFPS = 15
+	}
+	if config.CameraWidth < 32 || config.CameraWidth > 7680 ||
+		config.CameraHeight < 32 || config.CameraHeight > 4320 ||
+		config.CameraFPS < 1 || config.CameraFPS > 120 {
+		return nil, errors.New("invalid camera dimensions or frame rate")
+	}
 	apiURL, err := url.Parse(config.OTAAPIURL)
 	if err != nil || (apiURL.Scheme != "http" && apiURL.Scheme != "https") || apiURL.Host == "" {
 		return nil, fmt.Errorf("invalid OTA API URL %q", config.OTAAPIURL)
@@ -67,11 +95,12 @@ func New(config Config) (*Server, error) {
 		return nil, fmt.Errorf("open embedded assets: %w", err)
 	}
 	return &Server{
-		config:   config,
-		apiURL:   apiURL,
-		client:   &http.Client{Timeout: 30 * time.Minute},
-		sessions: make(map[string]session),
-		static:   http.FileServer(http.FS(staticFS)),
+		config:        config,
+		apiURL:        apiURL,
+		client:        &http.Client{Timeout: 30 * time.Minute},
+		sessions:      make(map[string]session),
+		static:        http.FileServer(http.FS(staticFS)),
+		cameraCommand: exec.CommandContext,
 	}, nil
 }
 
@@ -111,6 +140,8 @@ func (s *Server) authenticated(w http.ResponseWriter, r *http.Request) {
 		s.proxyJSON(w, r, http.MethodGet, "/api/v1/system", nil)
 	case r.URL.Path == "/api/update" && r.Method == http.MethodGet:
 		s.proxyJSON(w, r, http.MethodGet, "/api/v1/update", nil)
+	case r.URL.Path == "/api/camera" && r.Method == http.MethodGet:
+		s.cameraStatus(w)
 	case r.URL.Path == "/api/firmware" && r.Method == http.MethodPost:
 		if !validCSRF(r, current) {
 			writeJSON(w, http.StatusForbidden, map[string]string{"error": "invalid CSRF token"})
@@ -123,6 +154,20 @@ func (s *Server) authenticated(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.proxyJSON(w, r, http.MethodPost, "/api/v1/reboot", nil)
+	case r.URL.Path == "/api/camera/stream" && r.Method == http.MethodGet:
+		s.streamCamera(w, r)
+	case r.URL.Path == "/api/camera/stop" && r.Method == http.MethodPost:
+		if !validCSRF(r, current) {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "invalid CSRF token"})
+			return
+		}
+		s.stopCamera(w, r)
+	case r.URL.Path == "/api/camera/snapshot" && r.Method == http.MethodPost:
+		if !validCSRF(r, current) {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "invalid CSRF token"})
+			return
+		}
+		s.snapshotCamera(w, r)
 	case r.URL.Path == "/logout" && r.Method == http.MethodPost:
 		if !validCSRF(r, current) {
 			http.Error(w, "invalid CSRF token", http.StatusForbidden)
@@ -276,7 +321,7 @@ func (s *Server) serveAsset(w http.ResponseWriter, r *http.Request, name string)
 }
 
 func (s *Server) securityHeaders(w http.ResponseWriter) {
-	w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
+	w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data: blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
 	w.Header().Set("Referrer-Policy", "no-referrer")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("X-Frame-Options", "DENY")

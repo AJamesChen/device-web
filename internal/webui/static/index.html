@@ -17,35 +17,62 @@
   </header>
 
   <main class="shell">
-    <section class="hero">
-      <div><p class="eyebrow">System overview</p><h1 id="hostname">Loading device…</h1><p id="os" class="muted">Reading system information</p></div>
-      <button id="refresh" class="button-secondary" type="button">Refresh</button>
-    </section>
+    <nav class="tabs" aria-label="Device sections" role="tablist">
+      <button id="overview-tab" class="tab active" type="button" role="tab" aria-selected="true" aria-controls="overview-panel" data-tab="overview-panel">Overview</button>
+      <button id="camera-tab" class="tab" type="button" role="tab" aria-selected="false" aria-controls="camera-panel" data-tab="camera-panel">Camera</button>
+    </nav>
 
-    <section class="metrics" aria-label="System metrics">
-      <article class="metric"><span>Firmware</span><strong id="firmware">—</strong><small id="build-id">Build —</small></article>
-      <article class="metric"><span>Active slot</span><strong id="slot">—</strong><small id="root-device">Root —</small></article>
-      <article class="metric"><span>CPU load</span><strong id="cpu-load">—</strong><small id="cpu-model">—</small></article>
-      <article class="metric"><span>Memory</span><strong id="memory">—</strong><small id="memory-detail">—</small></article>
-      <article class="metric"><span>Kernel</span><strong id="kernel">—</strong><small id="architecture">—</small></article>
-      <article class="metric"><span>Uptime</span><strong id="uptime">—</strong><small id="updated-at">Last update —</small></article>
-    </section>
+    <div id="overview-panel" class="tab-panel" role="tabpanel" aria-labelledby="overview-tab">
+      <section class="hero">
+        <div><p class="eyebrow">System overview</p><h1 id="hostname">Loading device…</h1><p id="os" class="muted">Reading system information</p></div>
+        <button id="refresh" class="button-secondary" type="button">Refresh</button>
+      </section>
 
-    <section class="panel update-panel">
-      <div class="panel-heading"><div><p class="eyebrow">RAUC A/B update</p><h2>Firmware update</h2></div><span id="update-state" class="state neutral">Idle</span></div>
-      <p class="muted">Choose a signed <code>.raucb</code> bundle. RAUC verifies its signature and compatibility before writing the inactive slot.</p>
-      <div id="message" class="alert hidden" role="status"></div>
-      <form id="upload-form">
-        <label id="firmware-dropzone" class="dropzone" for="firmware-file">
-          <input id="firmware-file" type="file" accept=".raucb,application/octet-stream">
-          <span class="drop-title">Drop a firmware bundle here or select a file</span>
-          <span id="file-name" class="muted">No file selected</span>
-        </label>
-        <div class="progress-track" aria-hidden="true"><span id="progress"></span></div>
-        <div class="upload-row"><span id="upload-detail" class="muted">Maximum size: 384 MiB</span><button id="install" type="submit" disabled>Upload and install</button></div>
-      </form>
-      <p class="warning">Do not remove power during installation. Reboot only after the state reports succeeded.</p>
-    </section>
+      <section class="metrics" aria-label="System metrics">
+        <article class="metric"><span>Firmware</span><strong id="firmware">—</strong><small id="build-id">Build —</small></article>
+        <article class="metric"><span>Active slot</span><strong id="slot">—</strong><small id="root-device">Root —</small></article>
+        <article class="metric"><span>CPU load</span><strong id="cpu-load">—</strong><small id="cpu-model">—</small></article>
+        <article class="metric"><span>Memory</span><strong id="memory">—</strong><small id="memory-detail">—</small></article>
+        <article class="metric"><span>Kernel</span><strong id="kernel">—</strong><small id="architecture">—</small></article>
+        <article class="metric"><span>Uptime</span><strong id="uptime">—</strong><small id="updated-at">Last update —</small></article>
+      </section>
+
+      <section class="panel update-panel">
+        <div class="panel-heading"><div><p class="eyebrow">RAUC A/B update</p><h2>Firmware update</h2></div><span id="update-state" class="state neutral">Idle</span></div>
+        <p class="muted">Choose a signed <code>.raucb</code> bundle. RAUC verifies its signature and compatibility before writing the inactive slot.</p>
+        <div id="message" class="alert hidden" role="status"></div>
+        <form id="upload-form">
+          <label id="firmware-dropzone" class="dropzone" for="firmware-file">
+            <input id="firmware-file" type="file" accept=".raucb,application/octet-stream">
+            <span class="drop-title">Drop a firmware bundle here or select a file</span>
+            <span id="file-name" class="muted">No file selected</span>
+          </label>
+          <div class="progress-track" aria-hidden="true"><span id="progress"></span></div>
+          <div class="upload-row"><span id="upload-detail" class="muted">Maximum size: 384 MiB</span><button id="install" type="submit" disabled>Upload and install</button></div>
+        </form>
+        <p class="warning">Do not remove power during installation. Reboot only after the state reports succeeded.</p>
+      </section>
+    </div>
+
+    <div id="camera-panel" class="tab-panel hidden" role="tabpanel" aria-labelledby="camera-tab">
+      <section class="hero camera-hero">
+        <div><p class="eyebrow">V4L2 camera</p><h1>Live video</h1><p class="muted">View the camera feed or save a current frame as a JPEG.</p></div>
+        <span id="camera-state" class="state neutral">Stopped</span>
+      </section>
+      <section class="panel camera-card">
+        <div class="camera-stage">
+          <img id="camera-feed" class="hidden" alt="Live camera video">
+          <div id="camera-placeholder" class="camera-placeholder"><strong>Camera stopped</strong><span>Choose Play video to begin.</span></div>
+        </div>
+        <div id="camera-message" class="alert hidden" role="status"></div>
+        <div class="camera-controls">
+          <button id="camera-play" type="button">Play video</button>
+          <button id="camera-stop" class="button-secondary" type="button" disabled>Stop playback</button>
+          <button id="camera-snapshot" class="button-secondary" type="button">Snap picture</button>
+          <a id="camera-download" class="button-link hidden" download="camera-snapshot.jpg">Download picture</a>
+        </div>
+      </section>
+    </div>
   </main>
   <script src="/static/app.js" defer></script>
 </body>

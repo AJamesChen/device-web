@@ -1,19 +1,23 @@
 package webui
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
+	"time"
 )
 
 const testToken = "dca6327c4e1e"
 
-func newTestServers(t *testing.T) (*httptest.Server, *httptest.Server) {
+func newTestServers(t *testing.T) (*httptest.Server, *httptest.Server, *Server) {
 	t.Helper()
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got := r.Header.Get("Authorization"); got != "Bearer "+testToken {
@@ -49,7 +53,7 @@ func newTestServers(t *testing.T) (*httptest.Server, *httptest.Server) {
 	frontend := httptest.NewServer(app)
 	t.Cleanup(frontend.Close)
 	t.Cleanup(backend.Close)
-	return frontend, backend
+	return frontend, backend, app
 }
 
 func clientWithJar(t *testing.T) *http.Client {
@@ -90,7 +94,7 @@ func login(t *testing.T, client *http.Client, baseURL string) string {
 }
 
 func TestLoginAndAuthenticatedProxy(t *testing.T) {
-	frontend, _ := newTestServers(t)
+	frontend, _, _ := newTestServers(t)
 	client := clientWithJar(t)
 
 	response, err := client.Get(frontend.URL + "/api/system")
@@ -121,7 +125,7 @@ func TestLoginAndAuthenticatedProxy(t *testing.T) {
 }
 
 func TestInvalidLogin(t *testing.T) {
-	frontend, _ := newTestServers(t)
+	frontend, _, _ := newTestServers(t)
 	client := clientWithJar(t)
 	response, err := client.PostForm(frontend.URL+"/login", url.Values{"username": {"admin"}, "password": {"wrong"}})
 	if err != nil {
@@ -134,7 +138,7 @@ func TestInvalidLogin(t *testing.T) {
 }
 
 func TestFirmwareUploadRequiresCSRFAndStreamsBundle(t *testing.T) {
-	frontend, _ := newTestServers(t)
+	frontend, _, _ := newTestServers(t)
 	client := clientWithJar(t)
 	csrf := login(t, client, frontend.URL)
 
@@ -164,7 +168,7 @@ func TestFirmwareUploadRequiresCSRFAndStreamsBundle(t *testing.T) {
 }
 
 func TestRejectsOversizedFirmware(t *testing.T) {
-	frontend, _ := newTestServers(t)
+	frontend, _, _ := newTestServers(t)
 	client := clientWithJar(t)
 	csrf := login(t, client, frontend.URL)
 	request, _ := http.NewRequest(http.MethodPost, frontend.URL+"/api/firmware", strings.NewReader(strings.Repeat("x", 1025)))
@@ -180,7 +184,7 @@ func TestRejectsOversizedFirmware(t *testing.T) {
 }
 
 func TestRebootRequiresCSRFAndProxiesRequest(t *testing.T) {
-	frontend, _ := newTestServers(t)
+	frontend, _, _ := newTestServers(t)
 	client := clientWithJar(t)
 	csrf := login(t, client, frontend.URL)
 
@@ -204,5 +208,99 @@ func TestRebootRequiresCSRFAndProxiesRequest(t *testing.T) {
 	if response.StatusCode != http.StatusAccepted {
 		body, _ := io.ReadAll(response.Body)
 		t.Fatalf("reboot status = %d, want %d: %s", response.StatusCode, http.StatusAccepted, body)
+	}
+}
+
+func TestCameraRESTAPI(t *testing.T) {
+	frontend, _, app := newTestServers(t)
+	app.cameraCommand = func(ctx context.Context, _ string, args ...string) *exec.Cmd {
+		mode := "stream"
+		for _, arg := range args {
+			if arg == "--stream-count=1" {
+				mode = "snapshot"
+			}
+		}
+		command := exec.CommandContext(ctx, os.Args[0], "-test.run=TestCameraCommandHelper")
+		command.Env = append(os.Environ(), "DEVICE_WEB_CAMERA_TEST="+mode)
+		return command
+	}
+	client := clientWithJar(t)
+	csrf := login(t, client, frontend.URL)
+
+	response, err := client.Get(frontend.URL + "/api/camera")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var status map[string]any
+	if err := json.NewDecoder(response.Body).Decode(&status); err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if status["state"] != "stopped" || status["device"] != "/dev/video0" {
+		t.Fatalf("unexpected camera status: %#v", status)
+	}
+
+	response, err = client.Get(frontend.URL + "/api/camera/stream")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK || !strings.HasPrefix(response.Header.Get("Content-Type"), "multipart/x-mixed-replace") {
+		t.Fatalf("stream response = %d %q", response.StatusCode, response.Header.Get("Content-Type"))
+	}
+	defer response.Body.Close()
+
+	request, _ := http.NewRequest(http.MethodPost, frontend.URL+"/api/camera/stop", nil)
+	request.Header.Set("X-CSRF-Token", csrf)
+	stopResponse, err := client.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stopResponse.Body.Close()
+	if stopResponse.StatusCode != http.StatusOK {
+		t.Fatalf("stop status = %d, want %d", stopResponse.StatusCode, http.StatusOK)
+	}
+
+	request, _ = http.NewRequest(http.MethodPost, frontend.URL+"/api/camera/snapshot", nil)
+	request.Header.Set("X-CSRF-Token", csrf)
+	snapshot, err := client.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer snapshot.Body.Close()
+	picture, err := io.ReadAll(snapshot.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := string([]byte{0xff, 0xd8, 't', 'e', 's', 't', 0xff, 0xd9})
+	if snapshot.StatusCode != http.StatusOK || snapshot.Header.Get("Content-Type") != "image/jpeg" || string(picture) != want {
+		t.Fatalf("snapshot response = %d %q %x", snapshot.StatusCode, snapshot.Header.Get("Content-Type"), picture)
+	}
+}
+
+func TestCameraMutationRequiresCSRF(t *testing.T) {
+	frontend, _, _ := newTestServers(t)
+	client := clientWithJar(t)
+	login(t, client, frontend.URL)
+	for _, path := range []string{"/api/camera/stop", "/api/camera/snapshot"} {
+		request, _ := http.NewRequest(http.MethodPost, frontend.URL+path, nil)
+		response, err := client.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		response.Body.Close()
+		if response.StatusCode != http.StatusForbidden {
+			t.Fatalf("%s status = %d, want %d", path, response.StatusCode, http.StatusForbidden)
+		}
+	}
+}
+
+func TestCameraCommandHelper(t *testing.T) {
+	mode := os.Getenv("DEVICE_WEB_CAMERA_TEST")
+	if mode == "" {
+		return
+	}
+	_, _ = os.Stdout.Write([]byte{0xff, 0xd8, 't', 'e', 's', 't', 0xff, 0xd9})
+	if mode == "stream" {
+		time.Sleep(time.Hour)
 	}
 }

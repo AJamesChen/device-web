@@ -10,6 +10,7 @@ ExecStart=/usr/bin/device-web
 Restart=on-failure
 RestartSec=5s
 DynamicUser=yes
+SupplementaryGroups=video
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectHome=yes

@@ -2,6 +2,8 @@ const $ = (selector) => document.querySelector(selector);
 let csrfToken = '';
 let polling = null;
 let selectedFirmware = null;
+let cameraObjectURL = '';
+let cameraPlaying = false;
 const maxFirmwareSize = 384 * 1024 * 1024;
 
 function text(selector, value) { $(selector).textContent = value ?? '—'; }
@@ -92,6 +94,92 @@ function clearMessage() {
   const box = $('#message');
   box.textContent = '';
   box.className = 'alert hidden';
+}
+function showCameraMessage(message, error = false) {
+  const box = $('#camera-message');
+  box.textContent = message;
+  box.className = `alert ${error ? 'error' : 'success'}`;
+}
+function clearCameraMessage() {
+  const box = $('#camera-message');
+  box.textContent = '';
+  box.className = 'alert hidden';
+}
+function renderCameraState(state) {
+  cameraPlaying = state === 'playing';
+  const badge = $('#camera-state');
+  badge.textContent = cameraPlaying ? 'Playing' : 'Stopped';
+  badge.className = `state ${cameraPlaying ? 'succeeded' : 'neutral'}`;
+  $('#camera-play').disabled = cameraPlaying;
+  $('#camera-stop').disabled = !cameraPlaying;
+}
+function playCamera() {
+  clearCameraMessage();
+  if (cameraObjectURL) {
+    URL.revokeObjectURL(cameraObjectURL);
+    cameraObjectURL = '';
+  }
+  $('#camera-download').classList.add('hidden');
+  const feed = $('#camera-feed');
+  feed.classList.remove('hidden');
+  $('#camera-placeholder').classList.add('hidden');
+  renderCameraState('playing');
+  feed.src = `/api/camera/stream?cache=${Date.now()}`;
+}
+async function stopCameraPlayback({quiet = false} = {}) {
+  const feed = $('#camera-feed');
+  feed.removeAttribute('src');
+  feed.classList.add('hidden');
+  $('#camera-placeholder').classList.remove('hidden');
+  renderCameraState('stopped');
+  try {
+    await json('/api/camera/stop', {method: 'POST', headers: {'X-CSRF-Token': csrfToken}});
+    if (!quiet) showCameraMessage('Camera playback stopped.');
+  } catch (error) {
+    if (!quiet) showCameraMessage(error.message, true);
+    throw error;
+  }
+}
+async function snapCamera() {
+  const button = $('#camera-snapshot');
+  button.disabled = true;
+  clearCameraMessage();
+  try {
+    await stopCameraPlayback({quiet: true});
+    const response = await fetch('/api/camera/snapshot', {
+      method: 'POST',
+      headers: {'X-CSRF-Token': csrfToken},
+    });
+    if (response.status === 401) { window.location = '/login'; return; }
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || `Snapshot failed (${response.status})`);
+    }
+    const image = await response.blob();
+    if (cameraObjectURL) URL.revokeObjectURL(cameraObjectURL);
+    cameraObjectURL = URL.createObjectURL(image);
+    const feed = $('#camera-feed');
+    feed.src = cameraObjectURL;
+    feed.classList.remove('hidden');
+    $('#camera-placeholder').classList.add('hidden');
+    const download = $('#camera-download');
+    download.href = cameraObjectURL;
+    download.classList.remove('hidden');
+    showCameraMessage('Picture captured. Use Download picture to save it.');
+  } catch (error) {
+    showCameraMessage(error.message, true);
+  } finally {
+    button.disabled = false;
+  }
+}
+function selectTab(tabID) {
+  document.querySelectorAll('[role="tab"]').forEach((tab) => {
+    const selected = tab.dataset.tab === tabID;
+    tab.classList.toggle('active', selected);
+    tab.setAttribute('aria-selected', String(selected));
+  });
+  document.querySelectorAll('.tab-panel').forEach((panel) => panel.classList.toggle('hidden', panel.id !== tabID));
+  if (tabID !== 'camera-panel' && cameraPlaying) stopCameraPlayback({quiet: true}).catch(() => {});
 }
 function selectFirmware(file) {
   let error = '';
@@ -184,6 +272,17 @@ async function rebootDevice() {
 document.addEventListener('DOMContentLoaded', async () => {
   try { csrfToken = (await json('/api/session')).csrf_token; } catch (_) { return; }
   $('#refresh').addEventListener('click', () => { loadSystem(); loadUpdate(); });
+  document.querySelectorAll('[role="tab"]').forEach((tab) => tab.addEventListener('click', () => selectTab(tab.dataset.tab)));
+  $('#camera-play').addEventListener('click', playCamera);
+  $('#camera-stop').addEventListener('click', () => stopCameraPlayback().catch(() => {}));
+  $('#camera-snapshot').addEventListener('click', snapCamera);
+  $('#camera-feed').addEventListener('error', () => {
+    if (!cameraPlaying) return;
+    renderCameraState('stopped');
+    $('#camera-feed').classList.add('hidden');
+    $('#camera-placeholder').classList.remove('hidden');
+    showCameraMessage('The camera stream could not be opened.', true);
+  });
   const fileInput = $('#firmware-file');
   const dropzone = $('#firmware-dropzone');
   let dragDepth = 0;
