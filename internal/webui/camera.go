@@ -18,7 +18,21 @@ const (
 	maxJPEGSize    = 16 << 20
 )
 
-func (s *Server) cameraArgs(frameCount int) []string {
+func (s *Server) cameraCommandSpec(frameCount int) (string, []string) {
+	if s.config.CameraBackend == "gstreamer" {
+		args := []string{"-q", "v4l2src", "device=" + s.config.CameraDevice, "io-mode=mmap"}
+		if frameCount > 0 {
+			args = append(args, "num-buffers="+strconv.Itoa(frameCount))
+		}
+		args = append(args,
+			"!", "image/jpeg,width="+strconv.Itoa(s.config.CameraWidth)+
+				",height="+strconv.Itoa(s.config.CameraHeight)+
+				",framerate="+strconv.Itoa(s.config.CameraFPS)+"/1",
+			"!", "fdsink", "fd=1", "sync=false",
+		)
+		return "gst-launch-1.0", args
+	}
+
 	args := []string{
 		"--device=" + s.config.CameraDevice,
 		"--set-fmt-video=width=" + strconv.Itoa(s.config.CameraWidth) +
@@ -30,7 +44,7 @@ func (s *Server) cameraArgs(frameCount int) []string {
 	if frameCount > 0 {
 		args = append(args, "--stream-count="+strconv.Itoa(frameCount))
 	}
-	return args
+	return "v4l2-ctl", args
 }
 
 func (s *Server) beginCamera(requestContext context.Context) (context.Context, func(), bool) {
@@ -66,7 +80,8 @@ func (s *Server) streamCamera(w http.ResponseWriter, r *http.Request) {
 	}
 	defer finish()
 
-	command := s.cameraCommand(ctx, "v4l2-ctl", s.cameraArgs(0)...)
+	program, args := s.cameraCommandSpec(0)
+	command := s.cameraCommand(ctx, program, args...)
 	stdout, err := command.StdoutPipe()
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "cannot open camera output"})
@@ -149,11 +164,12 @@ func (s *Server) cameraStatus(w http.ResponseWriter) {
 		state = "streaming"
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"state":  state,
-		"device": s.config.CameraDevice,
-		"width":  s.config.CameraWidth,
-		"height": s.config.CameraHeight,
-		"fps":    s.config.CameraFPS,
+		"state":   state,
+		"backend": s.config.CameraBackend,
+		"device":  s.config.CameraDevice,
+		"width":   s.config.CameraWidth,
+		"height":  s.config.CameraHeight,
+		"fps":     s.config.CameraFPS,
 	})
 }
 
@@ -165,7 +181,8 @@ func (s *Server) snapshotCamera(w http.ResponseWriter, r *http.Request) {
 	}
 	defer finish()
 
-	command := s.cameraCommand(ctx, "v4l2-ctl", s.cameraArgs(1)...)
+	program, args := s.cameraCommandSpec(1)
+	command := s.cameraCommand(ctx, program, args...)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	command.Stdout = &stdout

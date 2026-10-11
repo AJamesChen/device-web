@@ -236,7 +236,7 @@ func TestCameraRESTAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	response.Body.Close()
-	if status["state"] != "stopped" || status["device"] != "/dev/video0" {
+	if status["state"] != "stopped" || status["backend"] != "v4l2" || status["device"] != "/dev/video0" {
 		t.Fatalf("unexpected camera status: %#v", status)
 	}
 
@@ -274,6 +274,41 @@ func TestCameraRESTAPI(t *testing.T) {
 	want := string([]byte{0xff, 0xd8, 't', 'e', 's', 't', 0xff, 0xd9})
 	if snapshot.StatusCode != http.StatusOK || snapshot.Header.Get("Content-Type") != "image/jpeg" || string(picture) != want {
 		t.Fatalf("snapshot response = %d %q %x", snapshot.StatusCode, snapshot.Header.Get("Content-Type"), picture)
+	}
+}
+
+func TestGStreamerCameraCommand(t *testing.T) {
+	app, err := New(Config{
+		Username: "admin", Password: "secret", OTAAPIURL: "http://127.0.0.1:8080",
+		OTAAPIToken: "token", MaxUpload: 1024, CameraBackend: "gstreamer",
+		CameraDevice: "/dev/video7", CameraWidth: 1280, CameraHeight: 720, CameraFPS: 30,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	program, args := app.cameraCommandSpec(1)
+	joined := strings.Join(args, " ")
+	if program != "gst-launch-1.0" {
+		t.Fatalf("program = %q, want gst-launch-1.0", program)
+	}
+	for _, expected := range []string{
+		"v4l2src device=/dev/video7 io-mode=mmap num-buffers=1",
+		"image/jpeg,width=1280,height=720,framerate=30/1",
+		"fdsink fd=1 sync=false",
+	} {
+		if !strings.Contains(joined, expected) {
+			t.Errorf("GStreamer arguments %q do not contain %q", joined, expected)
+		}
+	}
+}
+
+func TestRejectsUnknownCameraBackend(t *testing.T) {
+	_, err := New(Config{
+		Username: "admin", Password: "secret", OTAAPIURL: "http://127.0.0.1:8080",
+		OTAAPIToken: "token", MaxUpload: 1024, CameraBackend: "unknown",
+	})
+	if err == nil || !strings.Contains(err.Error(), "unsupported camera backend") {
+		t.Fatalf("New error = %v, want unsupported camera backend", err)
 	}
 }
 

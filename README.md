@@ -15,7 +15,7 @@ its browser assets in one native executable and proxies the loopback-only
 - Camera tab with live MJPEG playback, stop control, and JPEG snapshots
 - Authenticated REST camera API for browser and automation clients
 - CSRF protection, strict cookies, security headers, and upload limits
-- Standard-library-only Go build; camera capture uses `v4l2-ctl` at runtime
+- Standard-library-only Go build with selectable `v4l2-ctl` and GStreamer camera backends
 
 ## Run locally
 
@@ -96,6 +96,22 @@ curl -b cookies.txt -H "X-CSRF-Token: $CSRF" -X POST \
 The service account must be able to open the configured V4L2 node. The
 supplied systemd unit adds its dynamic user to the `video` group.
 
+### GStreamer backend
+
+Set `DEVICE_WEB_CAMERA_BACKEND=gstreamer` to capture through GStreamer instead
+of invoking `v4l2-ctl`. The service runs this pipeline for live playback:
+
+```sh
+gst-launch-1.0 -q v4l2src device=/dev/video0 io-mode=mmap \
+  ! 'image/jpeg,width=640,height=480,framerate=15/1' \
+  ! fdsink fd=1 sync=false
+```
+
+Snapshots use the same pipeline with `num-buffers=1`. The camera must provide
+JPEG/MJPEG at the configured resolution and frame rate. Install the GStreamer
+core tools and the `video4linux2` plugin; the Yocto recipe declares both when
+building the project image. `GET /api/camera` reports the active backend.
+
 ## Configuration
 
 | Environment variable | Default | Purpose |
@@ -111,6 +127,7 @@ supplied systemd unit adds its dynamic user to the `video` group.
 | `DEVICE_WEB_CAMERA_WIDTH` | `640` | Capture width in pixels |
 | `DEVICE_WEB_CAMERA_HEIGHT` | `480` | Capture height in pixels |
 | `DEVICE_WEB_CAMERA_FPS` | `15` | Requested stream frame rate |
+| `DEVICE_WEB_CAMERA_BACKEND` | `v4l2` | Capture backend: `v4l2` or `gstreamer` |
 
 The supplied files in `deploy/` show the intended systemd configuration.
 

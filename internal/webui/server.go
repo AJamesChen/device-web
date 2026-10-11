@@ -38,6 +38,7 @@ type Config struct {
 	CameraWidth   int
 	CameraHeight  int
 	CameraFPS     int
+	CameraBackend string
 }
 
 type session struct {
@@ -80,6 +81,13 @@ func New(config Config) (*Server, error) {
 	}
 	if config.CameraFPS == 0 {
 		config.CameraFPS = 15
+	}
+	config.CameraBackend = strings.ToLower(strings.TrimSpace(config.CameraBackend))
+	if config.CameraBackend == "" {
+		config.CameraBackend = "v4l2"
+	}
+	if config.CameraBackend != "v4l2" && config.CameraBackend != "gstreamer" {
+		return nil, fmt.Errorf("unsupported camera backend %q", config.CameraBackend)
 	}
 	if config.CameraWidth < 32 || config.CameraWidth > 7680 ||
 		config.CameraHeight < 32 || config.CameraHeight > 4320 ||

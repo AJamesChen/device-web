@@ -26,6 +26,7 @@ func main() {
 		CameraWidth:   envInt("DEVICE_WEB_CAMERA_WIDTH", 640),
 		CameraHeight:  envInt("DEVICE_WEB_CAMERA_HEIGHT", 480),
 		CameraFPS:     envInt("DEVICE_WEB_CAMERA_FPS", 15),
+		CameraBackend: env("DEVICE_WEB_CAMERA_BACKEND", "v4l2"),
 	}
 
 	app, err := webui.New(cfg)
