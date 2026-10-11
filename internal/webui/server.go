@@ -28,17 +28,21 @@ const (
 var assets embed.FS
 
 type Config struct {
-	Username      string
-	Password      string
-	OTAAPIURL     string
-	OTAAPIToken   string
-	SecureCookies bool
-	MaxUpload     int64
-	CameraDevice  string
-	CameraWidth   int
-	CameraHeight  int
-	CameraFPS     int
-	CameraBackend string
+	Username           string
+	Password           string
+	OTAAPIURL          string
+	OTAAPIToken        string
+	SecureCookies      bool
+	MaxUpload          int64
+	CameraDevice       string
+	CameraWidth        int
+	CameraHeight       int
+	CameraFPS          int
+	CameraBackend      string
+	CameraOSDEnabled   bool
+	CameraOSDText      string
+	CameraOSDFontSize  int
+	CameraSettingsPath string
 }
 
 type session struct {
@@ -47,17 +51,19 @@ type session struct {
 }
 
 type Server struct {
-	config        Config
-	apiURL        *url.URL
-	client        *http.Client
-	sessions      map[string]session
-	mu            sync.Mutex
-	static        http.Handler
-	cameraCommand func(context.Context, string, ...string) *exec.Cmd
-	cameraRun     sync.Mutex
-	cameraStateMu sync.Mutex
-	cameraCancel  context.CancelFunc
-	cameraDone    chan struct{}
+	config           Config
+	apiURL           *url.URL
+	client           *http.Client
+	sessions         map[string]session
+	mu               sync.Mutex
+	static           http.Handler
+	cameraCommand    func(context.Context, string, ...string) *exec.Cmd
+	cameraRun        sync.Mutex
+	cameraStateMu    sync.Mutex
+	cameraCancel     context.CancelFunc
+	cameraDone       chan struct{}
+	cameraSettingsMu sync.RWMutex
+	cameraSettings   cameraSettings
 }
 
 func New(config Config) (*Server, error) {
@@ -82,6 +88,12 @@ func New(config Config) (*Server, error) {
 	if config.CameraFPS == 0 {
 		config.CameraFPS = 15
 	}
+	if config.CameraOSDText == "" {
+		config.CameraOSDText = "MaxTV"
+	}
+	if config.CameraOSDFontSize == 0 {
+		config.CameraOSDFontSize = 20
+	}
 	config.CameraBackend = strings.ToLower(strings.TrimSpace(config.CameraBackend))
 	if config.CameraBackend == "" {
 		config.CameraBackend = "v4l2"
@@ -94,6 +106,21 @@ func New(config Config) (*Server, error) {
 		config.CameraFPS < 1 || config.CameraFPS > 120 {
 		return nil, errors.New("invalid camera dimensions or frame rate")
 	}
+	settings := cameraSettings{
+		OSDEnabled:  config.CameraOSDEnabled,
+		OSDText:     config.CameraOSDText,
+		OSDFontSize: config.CameraOSDFontSize,
+	}
+	if err := validateCameraSettings(settings); err != nil {
+		return nil, err
+	}
+	if config.CameraSettingsPath != "" {
+		loaded, err := loadCameraSettings(config.CameraSettingsPath, settings)
+		if err != nil {
+			return nil, fmt.Errorf("load camera settings: %w", err)
+		}
+		settings = loaded
+	}
 	apiURL, err := url.Parse(config.OTAAPIURL)
 	if err != nil || (apiURL.Scheme != "http" && apiURL.Scheme != "https") || apiURL.Host == "" {
 		return nil, fmt.Errorf("invalid OTA API URL %q", config.OTAAPIURL)
@@ -103,12 +130,13 @@ func New(config Config) (*Server, error) {
 		return nil, fmt.Errorf("open embedded assets: %w", err)
 	}
 	return &Server{
-		config:        config,
-		apiURL:        apiURL,
-		client:        &http.Client{Timeout: 30 * time.Minute},
-		sessions:      make(map[string]session),
-		static:        http.FileServer(http.FS(staticFS)),
-		cameraCommand: exec.CommandContext,
+		config:         config,
+		apiURL:         apiURL,
+		client:         &http.Client{Timeout: 30 * time.Minute},
+		sessions:       make(map[string]session),
+		static:         http.FileServer(http.FS(staticFS)),
+		cameraCommand:  exec.CommandContext,
+		cameraSettings: settings,
 	}, nil
 }
 
@@ -150,6 +178,14 @@ func (s *Server) authenticated(w http.ResponseWriter, r *http.Request) {
 		s.proxyJSON(w, r, http.MethodGet, "/api/v1/update", nil)
 	case r.URL.Path == "/api/camera" && r.Method == http.MethodGet:
 		s.cameraStatus(w)
+	case r.URL.Path == "/api/camera/settings" && r.Method == http.MethodGet:
+		s.getCameraSettings(w)
+	case r.URL.Path == "/api/camera/settings" && r.Method == http.MethodPut:
+		if !validCSRF(r, current) {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "invalid CSRF token"})
+			return
+		}
+		s.putCameraSettings(w, r)
 	case r.URL.Path == "/api/firmware" && r.Method == http.MethodPost:
 		if !validCSRF(r, current) {
 			writeJSON(w, http.StatusForbidden, map[string]string{"error": "invalid CSRF token"})

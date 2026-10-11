@@ -60,16 +60,33 @@
         <span id="camera-state" class="state neutral">Stopped</span>
       </section>
       <section class="panel camera-card">
-        <div class="camera-stage">
-          <img id="camera-feed" class="hidden" alt="Live camera video">
-          <div id="camera-placeholder" class="camera-placeholder"><strong>Camera stopped</strong><span>Choose Play video to begin.</span></div>
-        </div>
-        <div id="camera-message" class="alert hidden" role="status"></div>
-        <div class="camera-controls">
-          <button id="camera-play" type="button">Play video</button>
-          <button id="camera-stop" class="button-secondary" type="button" disabled>Stop playback</button>
-          <button id="camera-snapshot" class="button-secondary" type="button">Snap picture</button>
-          <a id="camera-download" class="button-link hidden" download="camera-snapshot.jpg">Download picture</a>
+        <div class="camera-layout">
+          <div class="camera-view">
+            <div class="camera-stage">
+              <img id="camera-feed" class="hidden" alt="Live camera video">
+              <div id="camera-placeholder" class="camera-placeholder"><strong>Camera stopped</strong><span>Choose Play video to begin.</span></div>
+            </div>
+            <div id="camera-message" class="alert hidden" role="status"></div>
+            <div class="camera-controls">
+              <button id="camera-play" type="button">Play video</button>
+              <button id="camera-stop" class="button-secondary" type="button" disabled>Stop playback</button>
+              <button id="camera-snapshot" class="button-secondary" type="button">Snap picture</button>
+              <a id="camera-download" class="button-link hidden" download="camera-snapshot.jpg">Download picture</a>
+            </div>
+          </div>
+          <aside class="camera-settings" aria-labelledby="camera-settings-title">
+            <div><p class="eyebrow">Configuration</p><h2 id="camera-settings-title">Video settings</h2></div>
+            <form id="camera-settings-form">
+              <label class="toggle-row" for="camera-osd-enabled">
+                <span><strong>Text overlay</strong><small>Show an OSD in the top-right corner.</small></span>
+                <input id="camera-osd-enabled" type="checkbox">
+              </label>
+              <label class="field" for="camera-osd-text"><span>OSD text</span><input id="camera-osd-text" type="text" maxlength="64" value="MaxTV" required></label>
+              <label class="field" for="camera-osd-font-size"><span>Font size</span><input id="camera-osd-font-size" type="number" min="8" max="96" value="20" required></label>
+              <p id="camera-settings-note" class="muted settings-note">GStreamer applies the overlay to live video and snapshots.</p>
+              <button id="camera-settings-save" type="submit">Save settings</button>
+            </form>
+          </aside>
         </div>
       </section>
     </div>

@@ -73,12 +73,14 @@ The same functions are available through the authenticated REST API:
 | Method | Endpoint | Result |
 | --- | --- | --- |
 | `GET` | `/api/camera` | Camera state and configured format as JSON |
+| `GET` | `/api/camera/settings` | Read the OSD settings and backend capability |
+| `PUT` | `/api/camera/settings` | Save the OSD enable state, text, and font size |
 | `GET` | `/api/camera/stream` | Live `multipart/x-mixed-replace` MJPEG response |
 | `POST` | `/api/camera/stop` | Stops capture and returns `{"state":"stopped"}` |
 | `POST` | `/api/camera/snapshot` | Captures and returns one `image/jpeg` |
 
-All endpoints require the login session cookie. The two `POST` calls also
-require the session's `csrf_token` from `GET /api/session` in the
+All endpoints require the login session cookie. The mutating `PUT` and `POST`
+calls also require the session's `csrf_token` from `GET /api/session` in the
 `X-CSRF-Token` header. For example, after logging in and saving cookies:
 
 ```sh
@@ -87,6 +89,10 @@ curl -c cookies.txt -d 'username=admin' -d 'password=YOUR_PASSWORD' \
 CSRF=$(curl -sS -b cookies.txt http://DEVICE:8081/api/session | \
   sed -n 's/.*"csrf_token":"\([^"]*\)".*/\1/p')
 curl -b cookies.txt http://DEVICE:8081/api/camera/stream -o live.mjpeg
+curl -b cookies.txt -H "X-CSRF-Token: $CSRF" \
+  -H 'Content-Type: application/json' -X PUT \
+  -d '{"osd_enabled":true,"osd_text":"MaxTV","osd_font_size":20}' \
+  http://DEVICE:8081/api/camera/settings
 curl -b cookies.txt -H "X-CSRF-Token: $CSRF" -X POST \
   http://DEVICE:8081/api/camera/snapshot -o snapshot.jpg
 curl -b cookies.txt -H "X-CSRF-Token: $CSRF" -X POST \
@@ -115,6 +121,20 @@ embedded EXIF thumbnails do not truncate playback frames. Starting playback
 also stops any stale capture before opening a new stream. `GET /api/camera`
 reports the active backend.
 
+When the text overlay is enabled, the pipeline decodes the camera JPEG, applies
+GStreamer's `textoverlay` element at the top-right, and encodes it back to JPEG:
+
+```sh
+... ! jpegdec ! videoconvert ! textoverlay text=MaxTV \
+  halignment=right valignment=top font-desc='Sans 20' xpad=12 ypad=12 \
+  ! jpegenc quality=90 ! fdsink fd=1 sync=false
+```
+
+The Camera tab keeps the OSD controls beside the live video. Settings are
+stored in `/var/lib/device-web/camera-settings.json`, survive service restarts,
+and apply to both live playback and snapshots. With OSD disabled, the native
+camera JPEG remains a pass-through pipeline with no decode/re-encode step.
+
 ## Configuration
 
 | Environment variable | Default | Purpose |
@@ -131,6 +151,10 @@ reports the active backend.
 | `DEVICE_WEB_CAMERA_HEIGHT` | `480` | Capture height in pixels |
 | `DEVICE_WEB_CAMERA_FPS` | `15` | Requested stream frame rate |
 | `DEVICE_WEB_CAMERA_BACKEND` | `v4l2` | Capture backend: `v4l2` or `gstreamer` |
+| `DEVICE_WEB_CAMERA_OSD_ENABLED` | `false` | Initial top-right text overlay state |
+| `DEVICE_WEB_CAMERA_OSD_TEXT` | `MaxTV` | Initial overlay text, up to 64 characters |
+| `DEVICE_WEB_CAMERA_OSD_FONT_SIZE` | `20` | Initial overlay font size, from 8 to 96 |
+| `DEVICE_WEB_CAMERA_SETTINGS_PATH` | `/var/lib/device-web/camera-settings.json` | Persistent camera settings file |
 
 The supplied files in `deploy/` show the intended systemd configuration.
 

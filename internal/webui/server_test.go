@@ -284,6 +284,7 @@ func TestGStreamerCameraCommand(t *testing.T) {
 		Username: "admin", Password: "secret", OTAAPIURL: "http://127.0.0.1:8080",
 		OTAAPIToken: "token", MaxUpload: 1024, CameraBackend: "gstreamer",
 		CameraDevice: "/dev/video7", CameraWidth: 1280, CameraHeight: 720, CameraFPS: 30,
+		CameraOSDEnabled: true, CameraOSDText: "FoxTV", CameraOSDFontSize: 20,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -296,11 +297,70 @@ func TestGStreamerCameraCommand(t *testing.T) {
 	for _, expected := range []string{
 		"v4l2src device=/dev/video7 io-mode=mmap num-buffers=1",
 		"image/jpeg,width=1280,height=720,framerate=30/1",
+		"jpegdec ! videoconvert ! textoverlay text=FoxTV halignment=right valignment=top font-desc=Sans 20",
+		"jpegenc quality=90",
 		"fdsink fd=1 sync=false",
 	} {
 		if !strings.Contains(joined, expected) {
 			t.Errorf("GStreamer arguments %q do not contain %q", joined, expected)
 		}
+	}
+	app.cameraSettings.OSDEnabled = false
+	_, args = app.cameraCommandSpec(0)
+	if strings.Contains(strings.Join(args, " "), "textoverlay") {
+		t.Fatal("disabled OSD unexpectedly added textoverlay to GStreamer pipeline")
+	}
+}
+
+func TestCameraSettingsRESTAPI(t *testing.T) {
+	frontend, _, app := newTestServers(t)
+	client := clientWithJar(t)
+	csrf := login(t, client, frontend.URL)
+	body := `{"osd_enabled":true,"osd_text":"FoxTV","osd_font_size":20}`
+
+	request, _ := http.NewRequest(http.MethodPut, frontend.URL+"/api/camera/settings", strings.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	response, err := client.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if response.StatusCode != http.StatusForbidden {
+		t.Fatalf("missing CSRF status = %d, want %d", response.StatusCode, http.StatusForbidden)
+	}
+
+	request, _ = http.NewRequest(http.MethodPut, frontend.URL+"/api/camera/settings", strings.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("X-CSRF-Token", csrf)
+	response, err = client.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	var settings map[string]any
+	if err := json.NewDecoder(response.Body).Decode(&settings); err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK || settings["osd_enabled"] != true || settings["osd_text"] != "FoxTV" || settings["osd_font_size"] != float64(20) {
+		t.Fatalf("unexpected camera settings response: status=%d body=%#v", response.StatusCode, settings)
+	}
+	if got := app.currentCameraSettings(); !got.OSDEnabled || got.OSDText != "FoxTV" || got.OSDFontSize != 20 {
+		t.Fatalf("camera settings not applied: %#v", got)
+	}
+}
+
+func TestCameraSettingsPersistence(t *testing.T) {
+	path := t.TempDir() + "/camera-settings.json"
+	want := cameraSettings{OSDEnabled: true, OSDText: "MaxTV", OSDFontSize: 20}
+	if err := saveCameraSettings(path, want); err != nil {
+		t.Fatal(err)
+	}
+	got, err := loadCameraSettings(path, cameraSettings{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Fatalf("loaded settings = %#v, want %#v", got, want)
 	}
 }
 

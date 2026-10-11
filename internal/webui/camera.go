@@ -28,8 +28,22 @@ func (s *Server) cameraCommandSpec(frameCount int) (string, []string) {
 			"!", "image/jpeg,width="+strconv.Itoa(s.config.CameraWidth)+
 				",height="+strconv.Itoa(s.config.CameraHeight)+
 				",framerate="+strconv.Itoa(s.config.CameraFPS)+"/1",
-			"!", "fdsink", "fd=1", "sync=false",
 		)
+		settings := s.currentCameraSettings()
+		if settings.OSDEnabled {
+			args = append(args,
+				"!", "jpegdec",
+				"!", "videoconvert",
+				"!", "textoverlay",
+				"text="+settings.OSDText,
+				"halignment=right", "valignment=top",
+				"font-desc=Sans "+strconv.Itoa(settings.OSDFontSize),
+				"xpad=12", "ypad=12",
+				"draw-shadow=true", "draw-outline=true",
+				"!", "jpegenc", "quality=90",
+			)
+		}
+		args = append(args, "!", "fdsink", "fd=1", "sync=false")
 		return "gst-launch-1.0", args
 	}
 
@@ -156,9 +170,7 @@ func (s *Server) stopCamera(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) cameraStatus(w http.ResponseWriter) {
-	s.cameraStateMu.Lock()
-	running := s.cameraCancel != nil
-	s.cameraStateMu.Unlock()
+	running := s.cameraIsRunning()
 	state := "stopped"
 	if running {
 		state = "streaming"
@@ -171,6 +183,12 @@ func (s *Server) cameraStatus(w http.ResponseWriter) {
 		"height":  s.config.CameraHeight,
 		"fps":     s.config.CameraFPS,
 	})
+}
+
+func (s *Server) cameraIsRunning() bool {
+	s.cameraStateMu.Lock()
+	defer s.cameraStateMu.Unlock()
+	return s.cameraCancel != nil
 }
 
 func (s *Server) snapshotCamera(w http.ResponseWriter, r *http.Request) {

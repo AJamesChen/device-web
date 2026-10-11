@@ -16,17 +16,21 @@ import (
 
 func main() {
 	cfg := webui.Config{
-		Username:      env("DEVICE_WEB_USERNAME", "admin"),
-		Password:      env("DEVICE_WEB_PASSWORD", "jamesc"),
-		OTAAPIURL:     env("DEVICE_WEB_OTA_API_URL", "http://127.0.0.1:8080"),
-		OTAAPIToken:   env("DEVICE_WEB_OTA_TOKEN", "dca6327c4e1e"),
-		SecureCookies: envBool("DEVICE_WEB_SECURE_COOKIES", false),
-		MaxUpload:     envInt64("DEVICE_WEB_MAX_UPLOAD", 384*1024*1024),
-		CameraDevice:  env("DEVICE_WEB_CAMERA_DEVICE", "/dev/video0"),
-		CameraWidth:   envInt("DEVICE_WEB_CAMERA_WIDTH", 640),
-		CameraHeight:  envInt("DEVICE_WEB_CAMERA_HEIGHT", 480),
-		CameraFPS:     envInt("DEVICE_WEB_CAMERA_FPS", 15),
-		CameraBackend: env("DEVICE_WEB_CAMERA_BACKEND", "v4l2"),
+		Username:           env("DEVICE_WEB_USERNAME", "admin"),
+		Password:           env("DEVICE_WEB_PASSWORD", "jamesc"),
+		OTAAPIURL:          env("DEVICE_WEB_OTA_API_URL", "http://127.0.0.1:8080"),
+		OTAAPIToken:        env("DEVICE_WEB_OTA_TOKEN", "dca6327c4e1e"),
+		SecureCookies:      envBool("DEVICE_WEB_SECURE_COOKIES", false),
+		MaxUpload:          envInt64("DEVICE_WEB_MAX_UPLOAD", 384*1024*1024),
+		CameraDevice:       env("DEVICE_WEB_CAMERA_DEVICE", "/dev/video0"),
+		CameraWidth:        envInt("DEVICE_WEB_CAMERA_WIDTH", 640),
+		CameraHeight:       envInt("DEVICE_WEB_CAMERA_HEIGHT", 480),
+		CameraFPS:          envInt("DEVICE_WEB_CAMERA_FPS", 15),
+		CameraBackend:      env("DEVICE_WEB_CAMERA_BACKEND", "v4l2"),
+		CameraOSDEnabled:   envBool("DEVICE_WEB_CAMERA_OSD_ENABLED", false),
+		CameraOSDText:      env("DEVICE_WEB_CAMERA_OSD_TEXT", "MaxTV"),
+		CameraOSDFontSize:  envInt("DEVICE_WEB_CAMERA_OSD_FONT_SIZE", 20),
+		CameraSettingsPath: env("DEVICE_WEB_CAMERA_SETTINGS_PATH", "/var/lib/device-web/camera-settings.json"),
 	}
 
 	app, err := webui.New(cfg)

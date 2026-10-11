@@ -63,11 +63,25 @@ h2 { margin-bottom: 0; font-size: 1.55rem; }
 .warning { margin: 1.5rem 0 0; padding-top: 1rem; border-top: 1px solid var(--line); color: var(--amber); font-size: .88rem; }
 .camera-hero { align-items: center; }
 .camera-card { margin-top: 0; }
+.camera-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 290px); gap: 1.5rem; align-items: start; }
+.camera-view { min-width: 0; }
 .camera-stage { position: relative; display: grid; place-items: center; width: 100%; min-height: 360px; overflow: hidden; border-radius: .85rem; background: #111715; }
 .camera-stage img { display: block; width: 100%; max-height: 70vh; object-fit: contain; }
 .camera-placeholder { display: grid; gap: .5rem; color: #d5ded9; text-align: center; }
 .camera-placeholder span { color: #93a39b; }
+.camera-view .alert { margin-top: 1rem; }
 .camera-controls { display: flex; align-items: center; gap: .7rem; margin-top: 1rem; flex-wrap: wrap; }
+.camera-settings { padding-left: 1.5rem; border-left: 1px solid var(--line); }
+.camera-settings form { display: grid; gap: 1.1rem; margin-top: 1.5rem; }
+.toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; cursor: pointer; }
+.toggle-row span { display: grid; gap: .25rem; }
+.toggle-row small, .settings-note { color: var(--muted); font-size: .8rem; line-height: 1.45; }
+.toggle-row input { width: 1.2rem; height: 1.2rem; accent-color: var(--green); }
+.field { display: grid; gap: .45rem; color: var(--ink); font-size: .85rem; font-weight: 750; }
+.field input { width: 100%; padding: .7rem .75rem; border: 1px solid #bcc8c1; border-radius: .55rem; background: white; }
+.field input:focus { outline: 3px solid #cce6da; border-color: var(--green); }
+.field input:disabled { color: var(--muted); background: #edf1ef; }
+.settings-note { margin: 0; }
 .button-link { display: inline-flex; align-items: center; min-height: 2.75rem; padding: .72rem 1rem; border: 1px solid var(--line); border-radius: .6rem; color: var(--green); font-weight: 700; text-decoration: none; }
 .button-link:hover { background: var(--green-soft); }
 .alert { padding: .8rem 1rem; border-radius: .65rem; background: var(--green-soft); color: var(--green-dark); }
@@ -84,5 +98,5 @@ h2 { margin-bottom: 0; font-size: 1.55rem; }
 .login-form button { margin-top: .7rem; }
 .security-note { margin: 1.5rem 0 0; text-align: center; color: var(--muted); font-size: .78rem; }
 code { background: #edf1ef; padding: .15rem .35rem; border-radius: .25rem; }
-@media (max-width: 780px) { .metrics { grid-template-columns: repeat(2, 1fr); } .top-actions .status-dot { display: none; } }
+@media (max-width: 780px) { .metrics { grid-template-columns: repeat(2, 1fr); } .top-actions .status-dot { display: none; } .camera-layout { grid-template-columns: 1fr; } .camera-settings { padding: 1.5rem 0 0; border-left: 0; border-top: 1px solid var(--line); } }
 @media (max-width: 520px) { .metrics { grid-template-columns: 1fr; } .hero { align-items: start; flex-direction: column; } .panel-heading, .upload-row { align-items: stretch; flex-direction: column; } .upload-row button { width: 100%; } .camera-stage { min-height: 240px; } .camera-controls > * { flex: 1 1 100%; justify-content: center; text-align: center; } .login-card { padding: 1.6rem; } }

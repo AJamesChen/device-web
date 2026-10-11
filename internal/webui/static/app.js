@@ -113,6 +113,57 @@ function renderCameraState(state) {
   $('#camera-play').disabled = cameraPlaying;
   $('#camera-stop').disabled = !cameraPlaying;
 }
+function updateOSDControls(supported = $('#camera-settings-form').dataset.supported === 'true') {
+  const enabled = supported && $('#camera-osd-enabled').checked;
+  $('#camera-osd-enabled').disabled = !supported;
+  $('#camera-osd-text').disabled = !enabled;
+  $('#camera-osd-font-size').disabled = !enabled;
+  $('#camera-settings-save').disabled = !supported;
+}
+function renderCameraSettings(settings) {
+  const supported = Boolean(settings.osd_supported);
+  $('#camera-settings-form').dataset.supported = String(supported);
+  $('#camera-osd-enabled').checked = Boolean(settings.osd_enabled);
+  $('#camera-osd-text').value = settings.osd_text || 'MaxTV';
+  $('#camera-osd-font-size').value = settings.osd_font_size || 20;
+  $('#camera-settings-note').textContent = supported
+    ? 'GStreamer applies the overlay to live video and snapshots.'
+    : 'Select the GStreamer camera backend to use text overlays.';
+  updateOSDControls(supported);
+}
+async function loadCameraSettings() {
+  try {
+    renderCameraSettings(await json('/api/camera/settings'));
+  } catch (error) {
+    showCameraMessage(error.message, true);
+  }
+}
+async function saveCameraSettings(event) {
+  event.preventDefault();
+  const wasPlaying = cameraPlaying;
+  const button = $('#camera-settings-save');
+  button.disabled = true;
+  clearCameraMessage();
+  try {
+    if (wasPlaying) await stopCameraPlayback({quiet: true});
+    const settings = await json('/api/camera/settings', {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken},
+      body: JSON.stringify({
+        osd_enabled: $('#camera-osd-enabled').checked,
+        osd_text: $('#camera-osd-text').value,
+        osd_font_size: Number($('#camera-osd-font-size').value),
+      }),
+    });
+    renderCameraSettings(settings);
+    if (wasPlaying) await playCamera();
+    showCameraMessage('Video settings saved.', false);
+  } catch (error) {
+    showCameraMessage(error.message, true);
+  } finally {
+    updateOSDControls();
+  }
+}
 async function playCamera() {
   clearCameraMessage();
   try {
@@ -282,6 +333,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#camera-play').addEventListener('click', playCamera);
   $('#camera-stop').addEventListener('click', () => stopCameraPlayback().catch(() => {}));
   $('#camera-snapshot').addEventListener('click', snapCamera);
+  $('#camera-osd-enabled').addEventListener('change', () => updateOSDControls());
+  $('#camera-settings-form').addEventListener('submit', saveCameraSettings);
   $('#camera-feed').addEventListener('error', () => {
     if (!cameraPlaying) return;
     renderCameraState('stopped');
@@ -332,5 +385,5 @@ document.addEventListener('DOMContentLoaded', async () => {
     event.preventDefault();
     fetch('/logout', {method: 'POST', headers: {'X-CSRF-Token': csrfToken}}).then(() => { window.location = '/login'; });
   });
-  await Promise.all([loadSystem(), loadUpdate()]);
+  await Promise.all([loadSystem(), loadUpdate(), loadCameraSettings()]);
 });
